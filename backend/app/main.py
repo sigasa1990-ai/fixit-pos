@@ -3,6 +3,8 @@ import logging.config
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+from alembic import command
+from alembic.config import Config
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -38,6 +40,12 @@ logger = logging.getLogger("app")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting FIXIT POS API", extra={"version": settings.APP_VERSION})
+    try:
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed")
+    except Exception as e:
+        logger.warning(f"Migrations failed: {e}")
     yield
     logger.info("Shutting down FIXIT POS API")
     await engine.dispose()
