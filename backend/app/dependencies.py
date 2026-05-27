@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from fastapi.security import HTTPAuthScheme, HTTPBearer
+from fastapi.security import HTTPBearer
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
