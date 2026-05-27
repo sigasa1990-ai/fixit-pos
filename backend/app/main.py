@@ -41,8 +41,8 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("SELECT 1"))
             logger.info("Database connection verified")
     except Exception as e:
-        logger.error("Database connection failed", extra={"error": str(e)})
-        raise
+        logger.warning("Database connection failed at startup", extra={"error": str(e)})
+        logger.info("App will start and retry on first request")
     yield
     logger.info("Shutting down FIXIT POS API")
     await engine.dispose()
