@@ -28,7 +28,10 @@ from app.modules.quotations.router import router as quotations_router
 
 settings = get_settings()
 
-logging.config.fileConfig("app/logging.conf", disable_existing_loggers=False)
+try:
+    logging.config.fileConfig("app/logging.conf", disable_existing_loggers=False)
+except Exception:
+    logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("app")
 
 
