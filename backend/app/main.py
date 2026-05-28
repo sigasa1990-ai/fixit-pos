@@ -161,6 +161,30 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
+@app.get("/debug/db")
+async def debug_db(db: AsyncSession = Depends(get_db)):
+    import traceback
+    results = {}
+    tables = ["tenants", "permissions", "roles", "users", "user_sessions", "audit_logs", "role_permissions"]
+    for table in tables:
+        try:
+            r = await db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            results[table] = {"exists": True, "count": r.scalar()}
+        except Exception as e:
+            results[table] = {"exists": False, "error": str(e)}
+    try:
+        await db.execute(text("SELECT get_current_tenant_id()"))
+        results["rls_func"] = "ok"
+    except Exception as e:
+        results["rls_func"] = str(e)
+    try:
+        r = await db.execute(text("SELECT current_setting('app.tenant_id', true)"))
+        results["app_tenant_id"] = r.scalar()
+    except Exception as e:
+        results["app_tenant_id"] = str(e)
+    return results
+
+
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_db)):
     try:
