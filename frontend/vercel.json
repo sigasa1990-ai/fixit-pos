@@ -26,11 +26,10 @@
       ]
     }
   ],
-  "redirects": [
+  "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://fixit-pos-api.onrender.com/$1",
-      "permanent": false
+      "destination": "https://fixit-pos-api.onrender.com/api/$1"
     }
   ],
   "env": {
