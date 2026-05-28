@@ -257,7 +257,7 @@ async def debug_stamp():
 
 @app.post("/debug/seed")
 async def debug_seed():
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    import bcrypt as _bcrypt
     async with async_session_factory() as db:
         try:
             existing = await db.execute(text("SELECT id FROM tenants LIMIT 1"))
@@ -271,7 +271,7 @@ async def debug_seed():
                 "INSERT INTO roles (tenant_id, name, role_type, description, is_system) "
                 "VALUES (:tid, 'Administrador', 'admin', 'Rol administrador del sistema', true) RETURNING id"
             ), {"tid": tid})).scalar()
-            pin_hash = pwd_context.hash("1234")
+            pin_hash = _bcrypt.hashpw(b"1234", _bcrypt.gensalt()).decode()
             uid = (await db.execute(text(
                 "INSERT INTO users (tenant_id, role_id, username, pin_hash, full_name, is_active) "
                 "VALUES (:tid, :rid, 'admin', :pin, 'Administrador', true) RETURNING id"
