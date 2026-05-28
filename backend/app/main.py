@@ -221,6 +221,12 @@ async def debug_migrate():
     return results
 
 
+@app.post("/debug/seed")
+async def debug_seed():
+    await seed_database()
+    return {"status": "ok"}
+
+
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_db)):
     try:
