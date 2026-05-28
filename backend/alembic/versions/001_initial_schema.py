@@ -17,66 +17,36 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Drop orphaned enums (in case previous migration failed mid-way)
+    for enum_name in [
+        "user_role_type", "document_status", "cash_register_status",
+        "movement_type", "payment_method", "payment_currency",
+        "warranty_type", "audit_action",
+    ]:
+        op.execute(f"DROP TYPE IF EXISTS {enum_name} CASCADE")
+
     # Extensions
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
     op.execute("CREATE EXTENSION IF NOT EXISTS citext")
 
-    # Enums (with IF NOT EXISTS via DO block for idempotency)
+    # Enums (fresh creation)
+    op.execute("CREATE TYPE user_role_type AS ENUM ('admin', 'supervisor', 'cashier')")
+    op.execute("CREATE TYPE document_status AS ENUM ('draft', 'active', 'parked', 'converted', 'cancelled', 'completed')")
+    op.execute("CREATE TYPE cash_register_status AS ENUM ('open', 'closed')")
+    op.execute("CREATE TYPE movement_type AS ENUM ('sale', 'purchase', 'transfer', 'adjustment', 'return', 'initial')")
+    op.execute("CREATE TYPE payment_method AS ENUM ('cash', 'card', 'transfer', 'usd', 'mixed')")
+    op.execute("CREATE TYPE payment_currency AS ENUM ('MXN', 'USD')")
+    op.execute("CREATE TYPE warranty_type AS ENUM ('standard', 'extended', 'none')")
     op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE user_role_type AS ENUM ('admin', 'supervisor', 'cashier');
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE document_status AS ENUM ('draft', 'active', 'parked', 'converted', 'cancelled', 'completed');
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE cash_register_status AS ENUM ('open', 'closed');
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE movement_type AS ENUM ('sale', 'purchase', 'transfer', 'adjustment', 'return', 'initial');
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE payment_method AS ENUM ('cash', 'card', 'transfer', 'usd', 'mixed');
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE payment_currency AS ENUM ('MXN', 'USD');
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE warranty_type AS ENUM ('standard', 'extended', 'none');
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
-    """)
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE audit_action AS ENUM (
-                'login', 'logout', 'sale.create', 'sale.cancel', 'sale.refund',
-                'cashier.open', 'cashier.close', 'cashier.in', 'cashier.out',
-                'inventory.adjust', 'inventory.transfer',
-                'product.create', 'product.update', 'product.delete',
-                'price.change', 'customer.create', 'customer.update',
-                'user.create', 'user.update', 'user.delete',
-                'config.update', 'override.pin'
-            );
-        EXCEPTION WHEN duplicate_object THEN null;
-        END $$;
+        CREATE TYPE audit_action AS ENUM (
+            'login', 'logout', 'sale.create', 'sale.cancel', 'sale.refund',
+            'cashier.open', 'cashier.close', 'cashier.in', 'cashier.out',
+            'inventory.adjust', 'inventory.transfer',
+            'product.create', 'product.update', 'product.delete',
+            'price.change', 'customer.create', 'customer.update',
+            'user.create', 'user.update', 'user.delete',
+            'config.update', 'override.pin'
+        )
     """)
 
     # 1. Tenants
@@ -128,7 +98,7 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
         sa.Column("name", sa.String(100), nullable=False),
-        sa.Column("role_type", sa.Enum("admin", "supervisor", "cashier", name="user_role_type"), nullable=False),
+        sa.Column("role_type", sa.Enum("admin", "supervisor", "cashier", name="user_role_type", create_type=False), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("is_system", sa.Boolean(), server_default=sa.text("false"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("NOW()"), nullable=True),
@@ -283,7 +253,7 @@ def upgrade() -> None:
         sa.Column("tax_rate", sa.Numeric(5, 2), server_default="0.00", nullable=True),
         sa.Column("unit", sa.String(50), server_default="pza", nullable=True),
         sa.Column("warranty_days", sa.Integer(), server_default="0", nullable=True),
-        sa.Column("warranty_type", sa.Enum("standard", "extended", "none", name="warranty_type"), server_default="none", nullable=True),
+        sa.Column("warranty_type", sa.Enum("standard", "extended", "none", name="warranty_type", create_type=False), server_default="none", nullable=True),
         sa.Column("is_active", sa.Boolean(), server_default=sa.text("true"), nullable=True),
         sa.Column("is_service", sa.Boolean(), server_default=sa.text("false"), nullable=True),
         sa.Column("track_inventory", sa.Boolean(), server_default=sa.text("true"), nullable=True),
@@ -336,7 +306,7 @@ def upgrade() -> None:
         sa.Column("location_id", sa.UUID(), nullable=False),
         sa.Column("branch_id", sa.UUID(), nullable=False),
         sa.Column("user_id", sa.UUID(), nullable=False),
-        sa.Column("movement_type", sa.Enum("sale", "purchase", "transfer", "adjustment", "return", "initial", name="movement_type"), nullable=False),
+        sa.Column("movement_type", sa.Enum("sale", "purchase", "transfer", "adjustment", "return", "initial", name="movement_type", create_type=False), nullable=False),
         sa.Column("reference_type", sa.String(50), nullable=True),
         sa.Column("reference_id", sa.UUID(), nullable=True),
         sa.Column("quantity_before", sa.Numeric(12, 4), nullable=False),
@@ -384,7 +354,7 @@ def upgrade() -> None:
         sa.Column("location_id", sa.UUID(), nullable=False),
         sa.Column("code", sa.String(20), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("status", sa.Enum("open", "closed", name="cash_register_status"), server_default="closed", nullable=True),
+        sa.Column("status", sa.Enum("open", "closed", name="cash_register_status", create_type=False), server_default="closed", nullable=True),
         sa.Column("current_balance", sa.Numeric(12, 2), server_default="0", nullable=True),
         sa.Column("opening_balance", sa.Numeric(12, 2), server_default="0", nullable=True),
         sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
@@ -495,7 +465,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("customer_id", sa.UUID(), nullable=True),
         sa.Column("folio", sa.String(30), nullable=False),
-        sa.Column("status", sa.Enum("draft", "active", "parked", "converted", "cancelled", "completed", name="document_status"), server_default="completed", nullable=True),
+        sa.Column("status", sa.Enum("draft", "active", "parked", "converted", "cancelled", "completed", name="document_status", create_type=False), server_default="completed", nullable=True),
         sa.Column("subtotal", sa.Numeric(12, 2), nullable=False),
         sa.Column("tax_total", sa.Numeric(12, 2), server_default="0", nullable=False),
         sa.Column("discount_total", sa.Numeric(12, 2), server_default="0", nullable=False),
@@ -558,8 +528,8 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), server_default=sa.text("gen_random_uuid()"), nullable=False),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
         sa.Column("sale_id", sa.UUID(), nullable=False),
-        sa.Column("payment_method", sa.Enum("cash", "card", "transfer", "usd", "mixed", name="payment_method"), nullable=False),
-        sa.Column("currency", sa.Enum("MXN", "USD", name="payment_currency"), server_default="MXN", nullable=True),
+        sa.Column("payment_method", sa.Enum("cash", "card", "transfer", "usd", "mixed", name="payment_method", create_type=False), nullable=False),
+        sa.Column("currency", sa.Enum("MXN", "USD", name="payment_currency", create_type=False), server_default="MXN", nullable=True),
         sa.Column("amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("amount_mxn", sa.Numeric(12, 2), nullable=False),
         sa.Column("exchange_rate", sa.Numeric(10, 4), server_default="1.0000", nullable=True),
@@ -587,7 +557,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.UUID(), nullable=False),
         sa.Column("customer_id", sa.UUID(), nullable=True),
         sa.Column("folio", sa.String(30), nullable=False),
-        sa.Column("status", sa.Enum("draft", "active", "parked", "converted", "cancelled", "completed", name="document_status"), server_default="draft", nullable=True),
+        sa.Column("status", sa.Enum("draft", "active", "parked", "converted", "cancelled", "completed", name="document_status", create_type=False), server_default="draft", nullable=True),
         sa.Column("subtotal", sa.Numeric(12, 2), nullable=False),
         sa.Column("tax_total", sa.Numeric(12, 2), server_default="0", nullable=True),
         sa.Column("discount_total", sa.Numeric(12, 2), server_default="0", nullable=True),
@@ -647,7 +617,7 @@ def upgrade() -> None:
         sa.Column("customer_id", sa.UUID(), nullable=False),
         sa.Column("product_id", sa.UUID(), nullable=False),
         sa.Column("user_id", sa.UUID(), nullable=False),
-        sa.Column("warranty_type", sa.Enum("standard", "extended", "none", name="warranty_type"), server_default="standard", nullable=True),
+        sa.Column("warranty_type", sa.Enum("standard", "extended", "none", name="warranty_type", create_type=False), server_default="standard", nullable=True),
         sa.Column("warranty_days", sa.Integer(), server_default="0", nullable=False),
         sa.Column("start_date", sa.Date(), server_default=sa.text("CURRENT_DATE"), nullable=False),
         sa.Column("end_date", sa.Date(), nullable=False),
@@ -678,7 +648,7 @@ def upgrade() -> None:
             "product.create", "product.update", "product.delete",
             "price.change", "customer.create", "customer.update",
             "user.create", "user.update", "user.delete",
-            "config.update", "override.pin", name="audit_action",
+            "config.update", "override.pin", name="audit_action", create_type=False,
         ), nullable=False),
         sa.Column("entity_type", sa.String(50), nullable=True),
         sa.Column("entity_id", sa.UUID(), nullable=True),
