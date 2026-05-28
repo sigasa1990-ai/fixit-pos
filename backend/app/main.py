@@ -393,57 +393,6 @@ async def dashboard_summary(
     }
 
 
-@app.post("/debug/test-login")
-async def debug_test_login():
-    from app.core.security import hash_pin, verify_pin
-    from app.database import async_session_factory
-    from app.core.tenant import set_session_context
-    from app.core.permissions import get_user_permissions
-    from uuid import uuid4
-    from sqlalchemy import text
-    steps = []
-    async with async_session_factory() as db:
-        try:
-            steps.append("query_user")
-            r = await db.execute(text("SELECT id, tenant_id, role_id, pin_hash, is_active FROM users WHERE username='admin'"))
-            u = r.fetchone()
-            steps.append(f"found={u is not None}")
-            if u:
-                steps.append("verify_pin")
-                v = verify_pin("1234", u.pin_hash)
-                steps.append(f"verify={v}")
-                if v:
-                    steps.append("insert_session")
-                    sid = uuid4()
-                    await db.execute(text(
-                        "INSERT INTO user_sessions (id, user_id, tenant_id, token_jti) VALUES (:id,:uid,:tid,:jti)"
-                    ), {"id": sid, "uid": u.id, "tid": u.tenant_id, "jti": str(uuid4())})
-                    steps.append("set_context")
-                    await set_session_context(db, u.tenant_id, u.id, "admin")
-                    steps.append("get_perms")
-                    perms = await get_user_permissions(db, u.role_id)
-                    steps.append(f"perms={len(perms)}")
-                    steps.append("log_audit")
-                    from app.core.audit import log_audit
-                    await log_audit(db, u.tenant_id, u.id, "login", entity_type="user", entity_id=u.id)
-                    steps.append("commit")
-                    await db.commit()
-                    steps.append("done")
-            return {"steps": steps}
-        except Exception as e:
-            await db.rollback()
-            return {"steps": steps, "error": str(e), "type": type(e).__name__}
-
-
-@app.post("/debug/test-hash")
-async def debug_test_hash():
-    from app.core.security import hash_pin, verify_pin
-    h = hash_pin("1234")
-    v = verify_pin("1234", h)
-    v2 = verify_pin("wrong", h)
-    return {"hash": h[:30]+"...", "verify_ok": v, "verify_wrong": v2}
-
-
 app.include_router(auth_router)
 app.include_router(products_router)
 app.include_router(inventory_router)
