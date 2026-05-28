@@ -8,6 +8,7 @@ from alembic.config import Config
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from passlib.context import CryptContext
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +19,7 @@ from app.core.middleware import (
     RequestLoggingMiddleware,
     SecurityHeadersMiddleware,
 )
-from app.database import engine, get_db
+from app.database import engine, get_db, async_session_factory
 from app.dependencies import get_current_tenant_id
 from app.modules.auth.router import router as auth_router
 from app.modules.products.router import router as products_router
@@ -37,6 +38,57 @@ except Exception:
 logger = logging.getLogger("app")
 
 
+async def seed_database():
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    async with async_session_factory() as db:
+        try:
+            existing = await db.execute(text("SELECT id FROM tenants LIMIT 1"))
+            if existing.fetchone():
+                logger.info("Seed data already exists, skipping")
+                return
+            logger.info("Creating seed data...")
+            tid = (await db.execute(text(
+                "INSERT INTO tenants (business_name, commercial_name, is_active) "
+                "VALUES ('FixIT Soluciones', 'FixIT Soluciones', true) RETURNING id"
+            ))).scalar()
+            rid = (await db.execute(text(
+                "INSERT INTO roles (tenant_id, name, role_type, description, is_system) "
+                "VALUES (:tid, 'Administrador', 'admin', 'Rol administrador del sistema', true) RETURNING id",
+            ), {"tid": tid})).scalar()
+            pin_hash = pwd_context.hash("1234")
+            uid = (await db.execute(text(
+                "INSERT INTO users (tenant_id, role_id, username, pin_hash, full_name, is_active) "
+                "VALUES (:tid, :rid, 'admin', :pin, 'Administrador', true) RETURNING id",
+            ), {"tid": tid, "rid": rid, "pin": pin_hash})).scalar()
+            perms = await db.execute(text("SELECT id FROM permissions"))
+            for row in perms.fetchall():
+                await db.execute(text(
+                    "INSERT INTO role_permissions (role_id, permission_id, tenant_id) "
+                    "VALUES (:rid, :pid, :tid) ON CONFLICT DO NOTHING"
+                ), {"rid": rid, "pid": row[0], "tid": tid})
+            bid = (await db.execute(text(
+                "INSERT INTO branches (tenant_id, code, name, is_active) "
+                "VALUES (:tid, 'PRINCIPAL', 'Sucursal Principal', true) RETURNING id"
+            ), {"tid": tid})).scalar()
+            await db.execute(text(
+                "INSERT INTO user_branches (user_id, branch_id, tenant_id, is_default) "
+                "VALUES (:uid, :bid, :tid, true)"
+            ), {"uid": uid, "bid": bid, "tid": tid})
+            wid = (await db.execute(text(
+                "INSERT INTO warehouses (tenant_id, branch_id, code, name, is_active) "
+                "VALUES (:tid, :bid, 'PRINCIPAL', 'Almacen Principal', true) RETURNING id"
+            ), {"tid": tid, "bid": bid})).scalar()
+            await db.execute(text(
+                "INSERT INTO locations (tenant_id, warehouse_id, branch_id, code, name, is_active) "
+                "VALUES (:tid, :wid, :bid, 'PRINCIPAL', 'Ubicacion Principal', true) RETURNING id"
+            ), {"tid": tid, "wid": wid, "bid": bid})
+            await db.commit()
+            logger.info("Seed data created: admin / 1234")
+        except Exception as e:
+            await db.rollback()
+            logger.warning(f"Seed failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting FIXIT POS API", extra={"version": settings.APP_VERSION})
@@ -46,6 +98,7 @@ async def lifespan(app: FastAPI):
         logger.info("Database migrations completed")
     except Exception as e:
         logger.warning(f"Migrations failed: {e}")
+    await seed_database()
     yield
     logger.info("Shutting down FIXIT POS API")
     await engine.dispose()
