@@ -221,6 +221,36 @@ async def debug_migrate():
     return results
 
 
+@app.post("/debug/reset-db")
+async def debug_reset_db():
+    async with async_session_factory() as db:
+        try:
+            tables = [
+                "locations", "warehouses", "user_branches", "branches",
+                "role_permissions", "audit_logs", "user_sessions",
+                "service_orders", "quotation_items", "quotations",
+                "sale_payments", "sale_items", "sales",
+                "cash_register_movements", "cash_registers",
+                "inventory_movements", "products", "categories",
+                "customers", "users", "roles", "permissions", "tenants",
+            ]
+            for t in tables:
+                await db.execute(text(f"DROP TABLE IF EXISTS {t} CASCADE"))
+            await db.execute(text("DROP TABLE IF EXISTS alembic_version"))
+            await db.commit()
+            import subprocess, sys
+            r = subprocess.run(
+                [sys.executable, "-m", "alembic", "upgrade", "head"],
+                capture_output=True, text=True, timeout=120,
+            )
+            if r.returncode != 0:
+                return {"status": "migration_failed", "stderr": r.stderr}
+            return {"status": "tables_dropped_and_recreated"}
+        except Exception as e:
+            await db.rollback()
+            return {"status": "error", "detail": str(e)}
+
+
 @app.post("/debug/stamp")
 async def debug_stamp():
     import subprocess, sys
