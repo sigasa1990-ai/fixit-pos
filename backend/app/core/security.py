@@ -3,21 +3,19 @@ from uuid import UUID
 
 import bcrypt
 import jwt
-from passlib.context import CryptContext
 
 from app.config import get_settings
 
 settings = get_settings()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_pin(pin: str) -> str:
-    return pwd_context.hash(pin)
+    return bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_pin(plain_pin: str, hashed_pin: str) -> bool:
     try:
-        return pwd_context.verify(plain_pin, hashed_pin)
+        return bcrypt.checkpw(plain_pin.encode("utf-8"), hashed_pin.encode("utf-8"))
     except (ValueError, TypeError):
         return False
 
