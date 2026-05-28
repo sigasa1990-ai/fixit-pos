@@ -163,7 +163,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.get("/debug/db")
 async def debug_db(db: AsyncSession = Depends(get_db)):
-    import traceback
     results = {}
     tables = ["tenants", "permissions", "roles", "users", "user_sessions", "audit_logs", "role_permissions"]
     for table in tables:
@@ -173,16 +172,28 @@ async def debug_db(db: AsyncSession = Depends(get_db)):
         except Exception as e:
             results[table] = {"exists": False, "error": str(e)}
     try:
-        await db.execute(text("SELECT get_current_tenant_id()"))
-        results["rls_func"] = "ok"
+        r = await db.execute(text("SELECT version FROM alembic_version"))
+        results["alembic_version"] = r.scalar()
     except Exception as e:
-        results["rls_func"] = str(e)
-    try:
-        r = await db.execute(text("SELECT current_setting('app.tenant_id', true)"))
-        results["app_tenant_id"] = r.scalar()
-    except Exception as e:
-        results["app_tenant_id"] = str(e)
+        results["alembic_version"] = str(e)
     return results
+
+
+@app.post("/debug/migrate")
+async def debug_migrate():
+    import subprocess, sys
+    try:
+        r = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            capture_output=True, text=True, timeout=60,
+        )
+        return {
+            "returncode": r.returncode,
+            "stdout": r.stdout,
+            "stderr": r.stderr,
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.get("/health")
