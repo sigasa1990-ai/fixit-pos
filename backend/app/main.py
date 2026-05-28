@@ -38,7 +38,7 @@ logger = logging.getLogger("app")
 
 
 async def seed_database():
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    from app.core.security import hash_pin
     async with async_session_factory() as db:
         try:
             existing = await db.execute(text("SELECT id FROM tenants LIMIT 1"))
@@ -54,7 +54,7 @@ async def seed_database():
                 "INSERT INTO roles (tenant_id, name, role_type, description, is_system) "
                 "VALUES (:tid, 'Administrador', 'admin', 'Rol administrador del sistema', true) RETURNING id",
             ), {"tid": tid})).scalar()
-            pin_hash = pwd_context.hash("1234")
+            pin_hash = hash_pin("1234")
             uid = (await db.execute(text(
                 "INSERT INTO users (tenant_id, role_id, username, pin_hash, full_name, is_active) "
                 "VALUES (:tid, :rid, 'admin', :pin, 'Administrador', true) RETURNING id",
