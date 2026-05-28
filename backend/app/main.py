@@ -393,6 +393,15 @@ async def dashboard_summary(
     }
 
 
+@app.post("/debug/test-hash")
+async def debug_test_hash():
+    from app.core.security import hash_pin, verify_pin
+    h = hash_pin("1234")
+    v = verify_pin("1234", h)
+    v2 = verify_pin("wrong", h)
+    return {"hash": h[:30]+"...", "verify_ok": v, "verify_wrong": v2}
+
+
 app.include_router(auth_router)
 app.include_router(products_router)
 app.include_router(inventory_router)
