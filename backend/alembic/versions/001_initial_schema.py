@@ -21,24 +21,62 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
     op.execute("CREATE EXTENSION IF NOT EXISTS citext")
 
-    # Enums
-    op.execute("CREATE TYPE user_role_type AS ENUM ('admin', 'supervisor', 'cashier')")
-    op.execute("CREATE TYPE document_status AS ENUM ('draft', 'active', 'parked', 'converted', 'cancelled', 'completed')")
-    op.execute("CREATE TYPE cash_register_status AS ENUM ('open', 'closed')")
-    op.execute("CREATE TYPE movement_type AS ENUM ('sale', 'purchase', 'transfer', 'adjustment', 'return', 'initial')")
-    op.execute("CREATE TYPE payment_method AS ENUM ('cash', 'card', 'transfer', 'usd', 'mixed')")
-    op.execute("CREATE TYPE payment_currency AS ENUM ('MXN', 'USD')")
-    op.execute("CREATE TYPE warranty_type AS ENUM ('standard', 'extended', 'none')")
+    # Enums (with IF NOT EXISTS via DO block for idempotency)
     op.execute("""
-        CREATE TYPE audit_action AS ENUM (
-            'login', 'logout', 'sale.create', 'sale.cancel', 'sale.refund',
-            'cashier.open', 'cashier.close', 'cashier.in', 'cashier.out',
-            'inventory.adjust', 'inventory.transfer',
-            'product.create', 'product.update', 'product.delete',
-            'price.change', 'customer.create', 'customer.update',
-            'user.create', 'user.update', 'user.delete',
-            'config.update', 'override.pin'
-        )
+        DO $$ BEGIN
+            CREATE TYPE user_role_type AS ENUM ('admin', 'supervisor', 'cashier');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE document_status AS ENUM ('draft', 'active', 'parked', 'converted', 'cancelled', 'completed');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE cash_register_status AS ENUM ('open', 'closed');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE movement_type AS ENUM ('sale', 'purchase', 'transfer', 'adjustment', 'return', 'initial');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE payment_method AS ENUM ('cash', 'card', 'transfer', 'usd', 'mixed');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE payment_currency AS ENUM ('MXN', 'USD');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE warranty_type AS ENUM ('standard', 'extended', 'none');
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE audit_action AS ENUM (
+                'login', 'logout', 'sale.create', 'sale.cancel', 'sale.refund',
+                'cashier.open', 'cashier.close', 'cashier.in', 'cashier.out',
+                'inventory.adjust', 'inventory.transfer',
+                'product.create', 'product.update', 'product.delete',
+                'price.change', 'customer.create', 'customer.update',
+                'user.create', 'user.update', 'user.delete',
+                'config.update', 'override.pin'
+            );
+        EXCEPTION WHEN duplicate_object THEN null;
+        END $$;
     """)
 
     # 1. Tenants

@@ -182,18 +182,24 @@ async def debug_db(db: AsyncSession = Depends(get_db)):
 @app.post("/debug/migrate")
 async def debug_migrate():
     import subprocess, sys
+    results = {}
+    try:
+        r = subprocess.run(
+            [sys.executable, "-m", "alembic", "stamp", "base"],
+            capture_output=True, text=True, timeout=30,
+        )
+        results["stamp"] = {"returncode": r.returncode, "stdout": r.stdout, "stderr": r.stderr}
+    except Exception as e:
+        results["stamp"] = {"error": str(e)}
     try:
         r = subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, timeout=120,
         )
-        return {
-            "returncode": r.returncode,
-            "stdout": r.stdout,
-            "stderr": r.stderr,
-        }
+        results["upgrade"] = {"returncode": r.returncode, "stdout": r.stdout, "stderr": r.stderr}
     except Exception as e:
-        return {"error": str(e)}
+        results["upgrade"] = {"error": str(e)}
+    return results
 
 
 @app.get("/health")
