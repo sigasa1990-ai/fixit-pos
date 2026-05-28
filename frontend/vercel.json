@@ -29,7 +29,7 @@
   "redirects": [
     {
       "source": "/api/(.*)",
-      "destination": "https://api-pos.fixitsoluciones.com/$1",
+      "destination": "https://fixit-pos-api.onrender.com/$1",
       "permanent": false
     }
   ],
