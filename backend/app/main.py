@@ -233,8 +233,52 @@ async def debug_stamp():
 
 @app.post("/debug/seed")
 async def debug_seed():
-    await seed_database()
-    return {"status": "ok"}
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    async with async_session_factory() as db:
+        try:
+            existing = await db.execute(text("SELECT id FROM tenants LIMIT 1"))
+            if existing.fetchone():
+                return {"status": "already_exists"}
+            tid = (await db.execute(text(
+                "INSERT INTO tenants (business_name, commercial_name, is_active) "
+                "VALUES ('FixIT Soluciones', 'FixIT Soluciones', true) RETURNING id"
+            ))).scalar()
+            rid = (await db.execute(text(
+                "INSERT INTO roles (tenant_id, name, role_type, description, is_system) "
+                "VALUES (:tid, 'Administrador', 'admin', 'Rol administrador del sistema', true) RETURNING id"
+            ), {"tid": tid})).scalar()
+            pin_hash = pwd_context.hash("1234")
+            uid = (await db.execute(text(
+                "INSERT INTO users (tenant_id, role_id, username, pin_hash, full_name, is_active) "
+                "VALUES (:tid, :rid, 'admin', :pin, 'Administrador', true) RETURNING id"
+            ), {"tid": tid, "rid": rid, "pin": pin_hash})).scalar()
+            perms = await db.execute(text("SELECT id FROM permissions"))
+            for row in perms.fetchall():
+                await db.execute(text(
+                    "INSERT INTO role_permissions (role_id, permission_id, tenant_id) "
+                    "VALUES (:rid, :pid, :tid) ON CONFLICT DO NOTHING"
+                ), {"rid": rid, "pid": row[0], "tid": tid})
+            bid = (await db.execute(text(
+                "INSERT INTO branches (tenant_id, code, name, is_active) "
+                "VALUES (:tid, 'PRINCIPAL', 'Sucursal Principal', true) RETURNING id"
+            ), {"tid": tid})).scalar()
+            await db.execute(text(
+                "INSERT INTO user_branches (user_id, branch_id, tenant_id, is_default) "
+                "VALUES (:uid, :bid, :tid, true)"
+            ), {"uid": uid, "bid": bid, "tid": tid})
+            wid = (await db.execute(text(
+                "INSERT INTO warehouses (tenant_id, branch_id, code, name, is_active) "
+                "VALUES (:tid, :bid, 'PRINCIPAL', 'Almacen Principal', true) RETURNING id"
+            ), {"tid": tid, "bid": bid})).scalar()
+            await db.execute(text(
+                "INSERT INTO locations (tenant_id, warehouse_id, branch_id, code, name, is_active) "
+                "VALUES (:tid, :wid, :bid, 'PRINCIPAL', 'Ubicacion Principal', true) RETURNING id"
+            ), {"tid": tid, "wid": wid, "bid": bid})
+            await db.commit()
+            return {"status": "ok", "tenant_id": str(tid)}
+        except Exception as e:
+            await db.rollback()
+            return {"status": "error", "detail": str(e)}
 
 
 @app.get("/health")
