@@ -221,6 +221,16 @@ async def debug_migrate():
     return results
 
 
+@app.post("/debug/stamp")
+async def debug_stamp():
+    import subprocess, sys
+    r = subprocess.run(
+        [sys.executable, "-m", "alembic", "stamp", "001"],
+        capture_output=True, text=True, timeout=30,
+    )
+    return {"returncode": r.returncode, "stdout": r.stdout, "stderr": r.stderr}
+
+
 @app.post("/debug/seed")
 async def debug_seed():
     await seed_database()
