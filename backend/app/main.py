@@ -225,17 +225,11 @@ async def debug_migrate():
 async def debug_reset_db():
     async with async_session_factory() as db:
         try:
-            tables = [
-                "locations", "warehouses", "user_branches", "branches",
-                "role_permissions", "audit_logs", "user_sessions",
-                "service_orders", "quotation_items", "quotations",
-                "sale_payments", "sale_items", "sales",
-                "cash_register_movements", "cash_registers",
-                "inventory_movements", "products", "categories",
-                "customers", "users", "roles", "permissions", "tenants",
-            ]
-            for t in tables:
-                await db.execute(text(f"DROP TABLE IF EXISTS {t} CASCADE"))
+            rows = await db.execute(text(
+                "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+            ))
+            for row in rows:
+                await db.execute(text(f"DROP TABLE IF EXISTS {row[0]} CASCADE"))
             await db.execute(text("DROP TABLE IF EXISTS alembic_version"))
             await db.commit()
             import subprocess, sys
