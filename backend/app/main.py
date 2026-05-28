@@ -182,7 +182,26 @@ async def debug_db(db: AsyncSession = Depends(get_db)):
 @app.post("/debug/migrate")
 async def debug_migrate():
     import subprocess, sys
+    from app.database import async_session_factory
     results = {}
+    enums = [
+        "user_role_type", "document_status", "cash_register_status",
+        "movement_type", "payment_method", "payment_currency",
+        "warranty_type", "audit_action",
+    ]
+    async with async_session_factory() as sess:
+        for enum in enums:
+            try:
+                await sess.execute(text(f"DROP TYPE IF EXISTS {enum} CASCADE"))
+                results.setdefault("drop_enums", {})[enum] = "dropped"
+            except Exception as e:
+                results.setdefault("drop_enums", {})[enum] = str(e)
+        try:
+            await sess.commit()
+            results["drop_enums_committed"] = True
+        except Exception as e:
+            await sess.rollback()
+            results["drop_enums_committed"] = str(e)
     try:
         r = subprocess.run(
             [sys.executable, "-m", "alembic", "stamp", "base"],
