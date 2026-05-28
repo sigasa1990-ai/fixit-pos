@@ -61,7 +61,7 @@ async def idempotency_middleware(
                 resource_id, request_hash, response_status, response_body, expires_at
             ) VALUES (
                 :tenant_id, :key, :resource_type,
-                :resource_id, :request_hash, :status, :body::jsonb,
+                :resource_id, :request_hash, :status, :body,
                 :expires_at
             )
             ON CONFLICT (tenant_id, idempotency_key)

@@ -23,8 +23,8 @@ async def log_audit(
             description, old_values, new_values, ip_address, user_agent
         ) VALUES (
             :tenant_id, :user_id, :action, :entity_type, :entity_id,
-            :description, :old_values::jsonb, :new_values::jsonb,
-            :ip_address::inet, :user_agent
+            :description, :old_values, :new_values,
+            :ip_address, :user_agent
         )
     """)
     await db.execute(query, {

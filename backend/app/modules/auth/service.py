@@ -64,7 +64,7 @@ async def authenticate_user(
             SET failed_login_attempts = 0,
                 locked_until = NULL,
                 last_login_at = NOW(),
-                last_login_ip = :ip::inet
+                last_login_ip = :ip
             WHERE id = :user_id
         """),
         {"user_id": user.id, "ip": ip_address},
@@ -78,7 +78,7 @@ async def authenticate_user(
     await db.execute(
         text("""
             INSERT INTO user_sessions (id, user_id, tenant_id, token_jti, ip_address, user_agent, logged_in_at, last_activity_at)
-            VALUES (:id, :user_id, :tenant_id, :token_jti, :ip::inet, :user_agent, NOW(), NOW())
+            VALUES (:id, :user_id, :tenant_id, :token_jti, :ip, :user_agent, NOW(), NOW())
         """),
         {
             "id": session_id,
